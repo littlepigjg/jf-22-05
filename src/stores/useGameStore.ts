@@ -219,7 +219,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       if (result.pocketedBalls.length > 0) {
         allNewPocketedIds.push(...result.pocketedBalls);
         for (let p = 0; p < result.pocketedBalls.length; p++) {
-          playPocket();
+          playPocket(result.pocketedBalls[p]);
         }
       }
       if (result.ballCollisions.length > 0) {
@@ -230,7 +230,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
             const relVx = ballA.vel.x - ballB.vel.x;
             const relVy = ballA.vel.y - ballB.vel.y;
             const collisionSpeed = Math.sqrt(relVx * relVx + relVy * relVy);
-            playBallCollision(collisionSpeed);
+            playBallCollision(col.a, col.b, collisionSpeed);
           }
         }
       }

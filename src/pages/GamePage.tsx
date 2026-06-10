@@ -5,7 +5,7 @@ import GameCanvas from '../components/GameCanvas';
 import HUD from '../components/HUD';
 import PowerBar from '../components/PowerBar';
 import {
-  Home, RotateCcw, Save, Eye, EyeOff } from 'lucide-react';
+  Home, RotateCcw, Save, Eye, EyeOff, Volume2, VolumeX } from 'lucide-react';
 import { FoulType } from '../game/types';
 
 export default function GamePage() {
@@ -14,12 +14,14 @@ export default function GamePage() {
   const phase = useGameStore((s) => s.phase);
   const winner = useGameStore((s) => s.winner);
   const showAimLine = useGameStore((s) => s.showAimLine);
+  const soundMuted = useGameStore((s) => s.soundMuted);
   const foul = useGameStore((s) => s.foul);
   const replayRecording = useGameStore((s) => s.replayRecording);
   const backToMenu = useGameStore((s) => s.backToMenu);
   const resetGame = useGameStore((s) => s.resetGame);
   const saveReplayToStorage = useGameStore((s) => s.saveReplayToStorage);
   const setShowAimLine = useGameStore((s) => s.setShowAimLine);
+  const toggleSoundMute = useGameStore((s) => s.toggleSoundMute);
   const startGame = useGameStore((s) => s.startGame);
   const mode = useGameStore((s) => s.mode);
   const playMode = useGameStore((s) => s.playMode);
@@ -72,6 +74,28 @@ export default function GamePage() {
             </button>
 
             <div className="flex items-center gap-2">
+              <button
+                onClick={() => toggleSoundMute()}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border transition-all text-sm font-semibold ${
+                  soundMuted
+                    ? 'bg-zinc-800/60 border-zinc-700/60 text-zinc-400'
+                    : 'bg-gradient-to-br from-emerald-500/20 to-emerald-700/30 border-emerald-500/50 text-emerald-300 hover:from-emerald-500/30 hover:to-emerald-700/40 shadow-[0_0_20px_rgba(16,185,129,0.12)]'
+                }`}
+                title={soundMuted ? '开启音效' : '关闭音效'}
+              >
+                {soundMuted ? (
+                  <>
+                    <VolumeX className="w-4 h-4" />
+                    <span>已静音</span>
+                  </>
+                ) : (
+                  <>
+                    <Volume2 className="w-4 h-4" />
+                    <span>音效开</span>
+                  </>
+                )}
+              </button>
+
               <button
                 onClick={() => setShowAimLine(!showAimLine)}
                 className={`p-2.5 rounded-xl border transition-all ${
