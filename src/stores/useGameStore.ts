@@ -27,6 +27,7 @@ import {
   generateReplay,
 } from '../game/replay';
 import { saveReplay } from '../utils/storage';
+import { playCueHit, playBallCollision, playPocket, toggleMute } from '../game/sound';
 
 interface UIState {
   aimAngle: number;
@@ -41,6 +42,7 @@ interface UIState {
   replayProgress: number;
   replayPlaying: boolean;
   replaySpeed: number;
+  soundMuted: boolean;
 }
 
 interface GameStore extends GameState, UIState {
@@ -73,6 +75,7 @@ interface GameStore extends GameState, UIState {
   setBalls: (balls: Ball[]) => void;
   clearFoul: () => void;
   backToMenu: () => void;
+  toggleSoundMute: () => void;
 }
 
 function createPlayers(
@@ -128,6 +131,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   replayProgress: 0,
   replayPlaying: false,
   replaySpeed: 1,
+  soundMuted: false,
 
   startGame: (mode, playMode, aiDifficulty) => {
     const balls = setupBalls(mode);
@@ -190,6 +194,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       foul: FoulTypeEnum.NONE,
     };
     applyShot(s.balls, s.aimAngle, s.power, MAX_POWER);
+    playCueHit(s.power);
     recordReplayShot(shot);
     set({ isCharging: false, currentShot: shot, phase: 'simulating', power: 0 });
   },
@@ -213,6 +218,21 @@ export const useGameStore = create<GameStore>((set, get) => ({
       const result = stepPhysics(s.balls, 1 / 120, s.currentShot?.hits, Date.now());
       if (result.pocketedBalls.length > 0) {
         allNewPocketedIds.push(...result.pocketedBalls);
+        for (let p = 0; p < result.pocketedBalls.length; p++) {
+          playPocket();
+        }
+      }
+      if (result.ballCollisions.length > 0) {
+        for (const col of result.ballCollisions) {
+          const ballA = s.balls.find((b) => b.id === col.a);
+          const ballB = s.balls.find((b) => b.id === col.b);
+          if (ballA && ballB) {
+            const relVx = ballA.vel.x - ballB.vel.x;
+            const relVy = ballA.vel.y - ballB.vel.y;
+            const collisionSpeed = Math.sqrt(relVx * relVx + relVy * relVy);
+            playBallCollision(collisionSpeed);
+          }
+        }
       }
     }
 
@@ -366,5 +386,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
       menuTab: 'home',
       replayId: null,
     });
+  },
+
+  toggleSoundMute: () => {
+    const newMuted = toggleMute();
+    set({ soundMuted: newMuted });
   },
 }));

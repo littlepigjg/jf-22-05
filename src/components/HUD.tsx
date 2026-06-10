@@ -12,6 +12,7 @@ export default function HUD() {
   const targetBallHint = useGameStore((s) => s.targetBallHint);
   const turnNumber = useGameStore((s) => s.turnNumber);
   const phase = useGameStore((s) => s.phase);
+  const soundMuted = useGameStore((s) => s.soundMuted);
 
   const currentPlayer = players.find((p) => p.id === currentPlayerId);
 
@@ -66,6 +67,22 @@ export default function HUD() {
               </div>
             </div>
           )}
+          <button
+            onClick={() => useGameStore.getState().toggleSoundMute()}
+            className="ml-2 p-1.5 rounded-lg bg-zinc-800/60 hover:bg-zinc-700/80 border border-zinc-600/40 transition-colors"
+            title={soundMuted ? '开启音效' : '静音'}
+          >
+            {soundMuted ? (
+              <svg className="w-4 h-4 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+              </svg>
+            ) : (
+              <svg className="w-4 h-4 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+              </svg>
+            )}
+          </button>
         </div>
       </div>
 
