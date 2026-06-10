@@ -5,6 +5,8 @@ export interface PlaybackHandle {
 type NodeGroup = {
   oscillators: OscillatorNode[];
   gains: GainNode[];
+  endedCount: number;
+  total: number;
 };
 
 let audioCtx: AudioContext | null = null;
@@ -13,11 +15,19 @@ const activeNodes: Set<NodeGroup> = new Set();
 
 let muted = false;
 
+const COLLISION_PAIR_DEBOUNCE_MS = 30;
+const COLLISION_GLOBAL_WINDOW_MS = 40;
+const COLLISION_MAX_PER_WINDOW = 2;
+const POCKET_DEBOUNCE_MS = 200;
+const STOP_FADE_MS = 0.002;
+
 const recentCollisions = new Map<string, number>();
 const recentPockets = new Map<number, number>();
 
-const COLLISION_DEBOUNCE_MS = 30;
-const POCKET_DEBOUNCE_MS = 50;
+let collisionBuffer: Array<{ velocity: number; aId: number; bId: number }> = [];
+let collisionTimerId: number | null = null;
+
+let playCollisionFn: ((velocity: number) => void) | null = null;
 
 function getCtx(): AudioContext {
   if (!audioCtx) {
@@ -47,19 +57,22 @@ export function toggleMute(): boolean {
 
 export function stopAll(): void {
   const ctx = audioCtx;
-  const now = ctx ? ctx.currentTime : 0;
+  if (!ctx) return;
+  const now = ctx.currentTime;
+
   for (const group of activeNodes) {
     for (let i = 0; i < group.gains.length; i++) {
       const gain = group.gains[i];
       const osc = group.oscillators[i];
+      if (!osc) continue;
       try {
         gain.gain.cancelScheduledValues(now);
         gain.gain.setValueAtTime(gain.gain.value, now);
-        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.01);
-        osc?.stop(now + 0.015);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + STOP_FADE_MS);
+        osc.stop(now + STOP_FADE_MS + 0.001);
       } catch {
         try {
-          osc?.stop();
+          osc.stop();
         } catch {
           // ignore
         }
@@ -73,7 +86,10 @@ function register(group: NodeGroup): void {
   activeNodes.add(group);
   for (const osc of group.oscillators) {
     osc.onended = () => {
-      activeNodes.delete(group);
+      group.endedCount++;
+      if (group.endedCount >= group.total) {
+        activeNodes.delete(group);
+      }
     };
   }
 }
@@ -96,8 +112,6 @@ export function playOscillators(specs: OscSpec[]): PlaybackHandle | null {
 
   const oscillators: OscillatorNode[] = [];
   const gains: GainNode[] = [];
-
-  let maxEndTime = now;
 
   for (const spec of specs) {
     const osc = ctx.createOscillator();
@@ -131,13 +145,17 @@ export function playOscillators(specs: OscSpec[]): PlaybackHandle | null {
     const endTime = now + stopAt + 0.001;
     osc.start(now);
     osc.stop(endTime);
-    if (endTime > maxEndTime) maxEndTime = endTime;
 
     oscillators.push(osc);
     gains.push(gain);
   }
 
-  const group: NodeGroup = { oscillators, gains };
+  const group: NodeGroup = {
+    oscillators,
+    gains,
+    endedCount: 0,
+    total: oscillators.length,
+  };
   register(group);
 
   return {
@@ -147,8 +165,8 @@ export function playOscillators(specs: OscSpec[]): PlaybackHandle | null {
         try {
           gains[i].gain.cancelScheduledValues(curNow);
           gains[i].gain.setValueAtTime(gains[i].gain.value, curNow);
-          gains[i].gain.exponentialRampToValueAtTime(0.0001, curNow + 0.01);
-          oscillators[i]?.stop(curNow + 0.015);
+          gains[i].gain.exponentialRampToValueAtTime(0.0001, curNow + STOP_FADE_MS);
+          oscillators[i]?.stop(curNow + STOP_FADE_MS + 0.001);
         } catch {
           try {
             oscillators[i]?.stop();
@@ -162,18 +180,55 @@ export function playOscillators(specs: OscSpec[]): PlaybackHandle | null {
   };
 }
 
-export function shouldPlayCollision(aId: number, bId: number): boolean {
+export function shouldPlayCollision(aId: number, bId: number, velocity: number): boolean {
+  if (muted) return false;
+
   const key = aId < bId ? `${aId}-${bId}` : `${bId}-${aId}`;
   const now = performance.now();
   const last = recentCollisions.get(key);
-  if (last !== undefined && now - last < COLLISION_DEBOUNCE_MS) {
+  if (last !== undefined && now - last < COLLISION_PAIR_DEBOUNCE_MS) {
     return false;
   }
   recentCollisions.set(key, now);
-  return true;
+
+  collisionBuffer.push({ velocity, aId, bId });
+
+  if (collisionTimerId === null) {
+    collisionTimerId = window.setTimeout(() => {
+      flushCollisions();
+    }, COLLISION_GLOBAL_WINDOW_MS);
+  }
+
+  return false;
+}
+
+function flushCollisions(): void {
+  collisionTimerId = null;
+
+  if (collisionBuffer.length === 0 || muted) {
+    collisionBuffer = [];
+    return;
+  }
+
+  collisionBuffer.sort((a, b) => b.velocity - a.velocity);
+
+  const toPlay = collisionBuffer.slice(0, COLLISION_MAX_PER_WINDOW);
+  collisionBuffer = [];
+
+  if (playCollisionFn) {
+    for (const col of toPlay) {
+      playCollisionFn(col.velocity);
+    }
+  }
+}
+
+export function setCollisionPlaybackFn(fn: (velocity: number) => void): void {
+  playCollisionFn = fn;
 }
 
 export function shouldPlayPocket(ballId: number): boolean {
+  if (muted) return false;
+
   const now = performance.now();
   const last = recentPockets.get(ballId);
   if (last !== undefined && now - last < POCKET_DEBOUNCE_MS) {
@@ -203,6 +258,10 @@ export function stopCleanup(): void {
   if (cleanupTimer !== null) {
     clearInterval(cleanupTimer);
     cleanupTimer = null;
+  }
+  if (collisionTimerId !== null) {
+    clearTimeout(collisionTimerId);
+    collisionTimerId = null;
   }
 }
 

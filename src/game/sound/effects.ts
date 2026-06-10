@@ -1,10 +1,38 @@
 import {
   playOscillators,
-  shouldPlayCollision,
   shouldPlayPocket,
+  shouldPlayCollision,
+  setCollisionPlaybackFn,
   isMuted,
   type PlaybackHandle,
 } from './engine';
+
+function playCollisionSound(velocity: number): void {
+  const maxVel = 28;
+  const normalized = Math.min(velocity / maxVel, 1);
+  const volume = 0.08 + normalized * 0.45;
+
+  playOscillators([
+    {
+      type: 'triangle',
+      startFreq: 600 + normalized * 800,
+      endFreq: 300,
+      freqRampDuration: 0.03,
+      startVolume: volume,
+      volumeRampDuration: 0.04,
+    },
+    {
+      type: 'square',
+      startFreq: 1800 + normalized * 1200,
+      endFreq: 600,
+      freqRampDuration: 0.015,
+      startVolume: volume * 0.3,
+      volumeRampDuration: 0.02,
+    },
+  ]);
+}
+
+setCollisionPlaybackFn(playCollisionSound);
 
 export function playCueHit(power: number): PlaybackHandle | null {
   if (isMuted()) return null;
@@ -35,32 +63,8 @@ export function playBallCollision(
   aId: number,
   bId: number,
   velocity: number,
-): PlaybackHandle | null {
-  if (isMuted()) return null;
-  if (!shouldPlayCollision(aId, bId)) return null;
-
-  const maxVel = 28;
-  const normalized = Math.min(velocity / maxVel, 1);
-  const volume = 0.08 + normalized * 0.45;
-
-  return playOscillators([
-    {
-      type: 'triangle',
-      startFreq: 600 + normalized * 800,
-      endFreq: 300,
-      freqRampDuration: 0.03,
-      startVolume: volume,
-      volumeRampDuration: 0.04,
-    },
-    {
-      type: 'square',
-      startFreq: 1800 + normalized * 1200,
-      endFreq: 600,
-      freqRampDuration: 0.015,
-      startVolume: volume * 0.3,
-      volumeRampDuration: 0.02,
-    },
-  ]);
+): void {
+  shouldPlayCollision(aId, bId, velocity);
 }
 
 export function playPocket(ballId: number): PlaybackHandle | null {
